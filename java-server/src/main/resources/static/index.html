@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPay | Admin Dashboard</title>
+    <!-- Modern Typography: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Ionicons for crisp icons -->
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="brand">
+                <div class="logo"></div>
+                <h2>OPay Admin</h2>
+            </div>
+            <ul class="nav-links">
+                <li class="active" data-view="dashboard">
+                    <ion-icon name="grid-outline"></ion-icon> Dashboard
+                </li>
+                <li data-view="accounts">
+                    <ion-icon name="people-outline"></ion-icon> Accounts
+                </li>
+                <li data-view="audit">
+                    <ion-icon name="list-outline"></ion-icon> Audit Logs
+                </li>
+            </ul>
+            <div class="nav-footer">
+                <div class="status-indicator online"></div>
+                <span>Gateway Connected</span>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="content">
+            <!-- Header -->
+            <header>
+                <h1 id="page-title">Dashboard Overview</h1>
+                <div class="header-actions">
+                    <button class="btn btn-primary" id="btn-seed">
+                        <ion-icon name="flash-outline"></ion-icon> Seed Data
+                    </button>
+                    <div class="user-profile">
+                        <img src="https://ui-avatars.com/api/?name=Admin&background=random&color=fff" alt="Admin">
+                    </div>
+                </div>
+            </header>
+
+            <!-- Views -->
+            <div id="view-dashboard" class="view active">
+                <div class="stats-grid">
+                    <div class="stat-card glass">
+                        <div class="stat-icon" style="background: rgba(46, 204, 113, 0.2); color: #2ecc71;">
+                            <ion-icon name="wallet-outline"></ion-icon>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Total Volume</h3>
+                            <p id="dash-volume">₹0.00</p>
+                        </div>
+                    </div>
+                    <div class="stat-card glass">
+                        <div class="stat-icon" style="background: rgba(52, 152, 219, 0.2); color: #3498db;">
+                            <ion-icon name="people-outline"></ion-icon>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Active Accounts</h3>
+                            <p id="dash-accounts">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card glass">
+                        <div class="stat-icon" style="background: rgba(155, 89, 182, 0.2); color: #9b59b6;">
+                            <ion-icon name="checkmark-done-outline"></ion-icon>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Transactions</h3>
+                            <p id="dash-txns">0</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="recent-section glass mt-4">
+                    <div class="section-header">
+                        <h2>Recent Activity</h2>
+                        <button class="btn btn-sm" onclick="switchView('audit')">View All</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table" id="dashboard-recent-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Event</th>
+                                    <th>Account</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-accounts" class="view">
+                <div class="glass flex-between mb-4">
+                    <h2>Manage Accounts</h2>
+                    <button class="btn btn-primary" onclick="openModal('createAccountModal')">
+                        <ion-icon name="add-outline"></ion-icon> New Account
+                    </button>
+                </div>
+                <div class="glass table-responsive">
+                    <table class="data-table" id="accounts-table">
+                        <thead>
+                            <tr>
+                                <th>Account No</th>
+                                <th>Name</th>
+                                <th>Phone</th>
+                                <th>Balance (₹)</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="view-audit" class="view">
+                <div class="glass mb-4 flex-between">
+                    <h2>System Audit Logs</h2>
+                    <button class="btn btn-secondary" onclick="fetchAuditLogs()">
+                        <ion-icon name="refresh-outline"></ion-icon> Refresh
+                    </button>
+                </div>
+                <div class="glass table-responsive">
+                    <table class="data-table" id="audit-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Type</th>
+                                <th>Account</th>
+                                <th>Phone</th>
+                                <th>Details</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal-overlay" id="createAccountModal">
+        <div class="modal glass">
+            <div class="modal-header">
+                <h2>Create Account</h2>
+                <button class="close-btn" onclick="closeModal('createAccountModal')"><ion-icon name="close-outline"></ion-icon></button>
+            </div>
+            <form id="createAccountForm">
+                <div class="form-group">
+                    <label>Account Number (10 digits)</label>
+                    <input type="text" id="new-acc-no" required pattern="\d{10}">
+                </div>
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="new-acc-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Phone Number (with country code)</label>
+                    <input type="text" id="new-acc-phone" required placeholder="+919876543210">
+                </div>
+                <div class="form-group">
+                    <label>Initial Balance (Paise)</label>
+                    <input type="number" id="new-acc-balance" value="0" min="0">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('createAccountModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="editBalanceModal">
+        <div class="modal glass">
+            <div class="modal-header">
+                <h2>Update Balance</h2>
+                <button class="close-btn" onclick="closeModal('editBalanceModal')"><ion-icon name="close-outline"></ion-icon></button>
+            </div>
+            <form id="editBalanceForm">
+                <input type="hidden" id="edit-acc-no">
+                <div class="form-group">
+                    <label>Account</label>
+                    <input type="text" id="edit-acc-display" disabled class="disabled-input">
+                </div>
+                <div class="form-group">
+                    <label>New Balance (Paise)</label>
+                    <input type="number" id="edit-acc-balance" required min="0">
+                    <small class="hint">100 paise = 1 Rupee</small>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editBalanceModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

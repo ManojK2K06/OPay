@@ -1,0 +1,10 @@
+package com.opay.model;
+
+public enum TxnStatus {
+    SUCCESS,
+    FAILED_INSUFFICIENT_FUNDS,
+    FAILED_INVALID_SIGNATURE,
+    FAILED_REPLAY,
+    FAILED_ACCOUNT_NOT_FOUND,
+    FAILED_DECRYPTION
+}
