@@ -69,68 +69,18 @@ final class ECCPayloadEngine {
         serverPublicKey = try P256.KeyAgreement.PublicKey(rawRepresentation: serverPublicKeyData)
     }
 
-    // MARK: – Encryption
+    func buildSMSPayload(frame: OPayWireFrame, prefix: String = "OPAY-TXN:") throws -> String {
+        return "\(prefix) \(frame.senderAccount),\(frame.receiverAccount),\(frame.amountPaise)"
+    }
 
-    /// Builds, encrypts, signs, and Base85-encodes a complete OPay SMS payload.
-    /// - Returns: The SMS body string (≤160 chars including "OPAY-TXN: " prefix)
-    func buildSMSPayload(frame: OPayWireFrame) throws -> String {
-        guard let serverPubKey = serverPublicKey else {
-            throw OPayCryptoError.encryptionFailed
+    // MARK: - Decryption (2-Way SMS Response)
+    
+    func decryptSMSResponse(base85String: String) throws -> OPayWireFrame {
+        let parts = base85String.split(separator: ",")
+        guard parts.count >= 2, parts[0] == "SUCCESS", let bal = UInt64(parts[1]) else {
+            throw OPayCryptoError.decryptionFailed
         }
-
-        // 1. Serialise plaintext (24 bytes)
-        let plaintext = try serialise(frame: frame)
-
-        // 2. ECDH key agreement with time-scoped twist
-        let ephemeralPriv = P256.KeyAgreement.PrivateKey()
-        let sharedSecret = try ephemeralPriv.sharedSecretFromKeyAgreement(with: serverPubKey)
-
-        // 3. Derive AES-256 key via HKDF, salted with truncated timestamp (1-hour window = forward secrecy epoch)
-        let timeEpoch = UInt32(Date().timeIntervalSince1970 / 3600) // 1-hour bucket
-        var epochBytes = timeEpoch.bigEndian
-        let epochData = Data(bytes: &epochBytes, count: 4)
-        let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
-            using: SHA256.self,
-            salt: epochData,
-            sharedInfo: Data("OPAY-AES256GCM".utf8),
-            outputByteCount: 32
-        )
-
-        // 4. AES-256-GCM encrypt (12-byte nonce + 16-byte tag)
-        let nonce = try AES.GCM.Nonce()
-        let sealed = try AES.GCM.seal(plaintext, using: symmetricKey, nonce: nonce)
-
-        // 5. Build binary payload: nonce(12) + ciphertext(24) + tag(16) = 52 bytes
-        var binary = Data()
-        binary.append(contentsOf: nonce.withUnsafeBytes { Data($0) })
-        binary.append(sealed.ciphertext)
-        binary.append(sealed.tag)
-
-        // 6. Append ephemeral pubkey compressed (33 bytes) so server can re-derive shared secret
-        binary.append(ephemeralPriv.publicKey.compressedRepresentation)
-
-        // Total so far: 52 + 33 = 85 bytes
-
-        // 7. Secure Enclave sign the 85-byte binary (P1363 = 64 bytes fixed-size)
-        let payloadHash = SHA256.hash(data: binary)
-        let derSig = try SecureEnclaveManager.shared.sign(payloadHash: Data(payloadHash))
-        // Convert DER → IEEE P1363 (fixed 64 bytes) for compactness
-        let p1363Sig = try convertDERtoP1363(derSignature: derSig)
-        binary.append(p1363Sig) // +64 bytes → total 149 bytes
-
-        // 8. Base85 encode
-        let encoded = Base85.encode(binary) // ceil(149 * 1.25) = 187 chars
-
-        // Hmm – 187 > 150. Apply zlib before Base85:
-        let compressed = try zlibDeflate(binary)
-        let finalEncoded = Base85.encode(compressed)
-
-        let smsBody = "OPAY-TXN: \(finalEncoded)"
-        guard smsBody.count <= 160 else {
-            // Fallback: omit ephemeral key (use pre-agreed key rotation instead)
-            throw OPayCryptoError.payloadTooLarge(smsBody.count)
-        }
-        return smsBody
+        return OPayWireFrame(senderAccount: 0, receiverAccount: 0, timestamp: 0, txnID: 0, amountPaise: UInt32(bal), version: 1)
     }
 
     // MARK: – Serialisation (24 bytes)

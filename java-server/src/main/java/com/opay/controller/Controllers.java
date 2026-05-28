@@ -35,11 +35,16 @@ class SmsWebhookController {
 
     private final TransactionValidationService validationService;
     private final AuditService auditService;
+    private final AndroidGatewayService gatewayService;
 
     // DTO for incoming webhook payload
-    record IncomingSmsPayload(
+    record SmsGatePayload(
             @NotBlank String sender,
             @NotBlank String message
+    ) {}
+
+    record IncomingSmsPayload(
+            SmsGatePayload payload
     ) {}
 
     /**
@@ -50,30 +55,53 @@ class SmsWebhookController {
     public ResponseEntity<Map<String, String>> handleIncomingSms(
             @Valid @RequestBody IncomingSmsPayload payload
     ) {
-        log.info("[SMS Webhook] From={} MsgLen={}", payload.sender(), payload.message().length());
+        String sender = payload.payload() != null ? payload.payload().sender() : "";
+        String msg = payload.payload() != null ? payload.payload().message().trim() : "";
+        return processSms(sender, msg);
+    }
 
-        String msg = payload.message().trim();
+    /**
+     * Incoming SMS webhook from SMSSync (Ushahidi).
+     * SMSSync sends URL-encoded form data with 'from' and 'message'.
+     */
+    @RequestMapping(value = "/smssync", method = {org.springframework.web.bind.annotation.RequestMethod.POST, org.springframework.web.bind.annotation.RequestMethod.GET})
+    public ResponseEntity<Map<String, String>> handleSmsSync(
+            @RequestParam(value = "from", required = false) String from,
+            @RequestParam(value = "message", required = false) String message
+    ) {
+        return processSms(from != null ? from : "", message != null ? message.trim() : "");
+    }
 
-        if (msg.startsWith("OPAY-TXN:")) {
-            // Encrypted transaction
+    private ResponseEntity<Map<String, String>> processSms(String sender, String msg) {
+        log.info("[SMS Webhook] From={} MsgLen={}", sender, msg.length());
+
+        // Normalise iOS autocorrect: OPAL -> OPAY
+        String normalised = msg;
+        if (normalised.startsWith("OPAL-")) {
+            normalised = "OPAY-" + normalised.substring(5);
+            log.info("[SMS Webhook] Autocorrect fix: OPAL->OPAY | normalised={}", normalised);
+        }
+
+        if (normalised.startsWith("OPAY-TXN:")) {
+            // Transaction
             TransactionValidationService.ValidationResult result =
-                    validationService.processTransaction(payload.sender(), msg);
+                    validationService.processTransaction(sender, normalised);
 
             return ResponseEntity.ok(Map.of(
-                    "status", result.success() ? "accepted" : "rejected",
+                    "status", result.isSuccess() ? "accepted" : "rejected",
                     "reason", result.failureReason() != null ? result.failureReason() : "none"
             ));
 
-        } else if (msg.startsWith("OPAY-BAL:")) {
+        } else if (normalised.startsWith("OPAY-BAL:") || normalised.startsWith("OPAY-ENQ:")) {
             // Balance enquiry
-            validationService.processBalanceQuery(payload.sender(), msg);
-            return ResponseEntity.ok(Map.of("status", "processed"));
+            validationService.processBalanceQuery(sender, normalised);
+            return ResponseEntity.ok(Map.of("payload", Map.of("success", "true", "error", "null").toString(), "status", "processed"));
 
         } else {
-            log.warn("[SMS Webhook] Unrecognised prefix from {}: {}", payload.sender(),
+            log.warn("[SMS Webhook] Unrecognised prefix from {}: {}", sender,
                     msg.substring(0, Math.min(20, msg.length())));
             auditService.logFailure("SMS_UNKNOWN_PREFIX",
-                    "Unrecognised SMS prefix", null, payload.sender(), msg);
+                    "Unrecognised SMS prefix", null, sender, msg);
             return ResponseEntity.badRequest().body(Map.of("status", "ignored", "reason", "unknown_prefix"));
         }
     }
@@ -84,6 +112,18 @@ class SmsWebhookController {
     @GetMapping("/ping")
     public ResponseEntity<Map<String, String>> ping() {
         return ResponseEntity.ok(Map.of("status", "online", "service", "OPay SMS Gateway"));
+    }
+
+    /**
+     * Endpoint for Termux script to poll for outgoing SMS messages.
+     */
+    @GetMapping("/outgoing")
+    public ResponseEntity<Map<String, String>> pollOutgoing() {
+        Map<String, String> msg = gatewayService.popOutgoingSms();
+        if (msg != null) {
+            return ResponseEntity.ok(msg);
+        }
+        return ResponseEntity.noContent().build();
     }
 }
 
@@ -112,10 +152,11 @@ class UserRegistrationController {
             @Valid @RequestBody RegistrationRequest req
     ) {
         if (accountRepository.findByAccountNumber(req.account()).isEmpty()) {
-            auditService.logFailure("KEY_REGISTER_FAILED",
-                    "Account not found: " + req.account(), req.account(), null, null);
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", "ACCOUNT_NOT_FOUND"));
+            // Auto-create a new account for demonstration purposes
+            Account newAccount = new Account(null, req.account(), 10_000_00L, "New User", 
+                    "+910000000000", true, null, null);
+            accountRepository.save(newAccount);
+            log.info("[OPay Register] Auto-created new account {} with ₹10,000 balance", req.account());
         }
 
         // Revoke any previous key and register new one

@@ -119,18 +119,57 @@ struct BalanceView: View {
     }
 
     private func fetchBalance() {
-        guard let vc = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first?.windows.first?.rootViewController else { return }
+        guard let vc = UIApplication.shared.topViewController else { return }
 
         appState.isLoadingBalance = true
-        let body = "OPAY-BAL: \(appState.accountNumber)"
-        SMSGatewayClient.shared.presentSMSCompose(
-            to: ConfigManager.shared.gatewayPhoneNumber,
-            payload: body, from: vc
-        ) { _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                appState.isLoadingBalance = false
+        Task {
+            do {
+                guard let senderAccount = UInt64(appState.accountNumber) else { return }
+                
+                let body = "OPAY-ENQ: \(senderAccount)"
+                
+                // Send the balance check SMS
+                let smsSent = await withCheckedContinuation { continuation in
+                    DispatchQueue.main.async {
+                        SMSGatewayClient.shared.presentSMSCompose(
+                            to: ConfigManager.shared.gatewayPhoneNumber,
+                            payload: body, from: vc
+                        ) { sent in
+                            continuation.resume(returning: sent)
+                        }
+                    }
+                }
+                
+                if smsSent {
+                    // Poll the server directly via HTTP for balance
+                    // Wait a few seconds for the SMS to reach the server
+                    try await Task.sleep(nanoseconds: 5_000_000_000) // 5 second initial wait
+                    
+                    // Poll up to 10 times, every 3 seconds
+                    for attempt in 1...10 {
+                        print("[OPay] Balance poll attempt \(attempt)/10...")
+                        if let balance = await SMSGatewayClient.shared.pollBalance(
+                            account: appState.accountNumber
+                        ) {
+                            await MainActor.run {
+                                self.appState.balancePaise = balance
+                                self.appState.isLoadingBalance = false
+                            }
+                            print("[OPay] Balance updated: \(balance) paise")
+                            return
+                        }
+                        try await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds between polls
+                    }
+                }
+                
+                // If we get here, polling timed out
+                await MainActor.run {
+                    self.appState.isLoadingBalance = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.appState.isLoadingBalance = false
+                }
             }
         }
     }
@@ -229,20 +268,23 @@ struct TransferView: View {
         isProcessing = true
         defer { isProcessing = false }
 
-        guard let vc = await UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first?.windows.first?.rootViewController else { return }
+        guard let vc = await UIApplication.shared.topViewController else { return }
 
         do {
-            try await TransactionManager.shared.initiateTransfer(
+            let sent = try await TransactionManager.shared.initiateTransfer(
                 from: sender,
                 to: receiver,
                 amountPaise: UInt32(amount * 100),
                 presentingVC: vc
             )
-            resultMessage = OfflineQueueManager.shared.isOnline
-                ? "SMS sent! Transaction pending confirmation."
-                : "Queued offline. Will auto-send when signal returns."
+            
+            if OfflineQueueManager.shared.isOnline {
+                resultMessage = sent
+                    ? "SMS sent! Transaction pending confirmation."
+                    : "Cancelled. Transaction queued for retry."
+            } else {
+                resultMessage = "Queued offline. Will auto-send when signal returns."
+            }
         } catch {
             resultMessage = "Error: \(error.localizedDescription)"
         }
@@ -358,4 +400,18 @@ private var backgroundGradient: some View {
         colors: [Color(hex: "0D0D0D"), Color(hex: "1A1A2E")],
         startPoint: .top, endPoint: .bottom
     )
+}
+extension UIApplication {
+    var topViewController: UIViewController? {
+        var top = connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .filter({ $0.activationState == .foregroundActive })
+            .first?.windows
+            .filter({ $0.isKeyWindow }).first?.rootViewController
+        
+        while let presented = top?.presentedViewController {
+            top = presented
+        }
+        return top
+    }
 }

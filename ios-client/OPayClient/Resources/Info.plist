@@ -22,7 +22,7 @@
     <key>OPAY_GATEWAY_PHONE</key>
     <string>+919380865986</string>
     <key>OPAY_SERVER_URL</key>
-    <string>http://192.168.1.100:8080</string>
+    <string>http://192.168.29.106:8080</string>
 
     <!-- Allow local network HTTP (remove in production / use HTTPS) -->
     <key>NSAppTransportSecurity</key>
@@ -31,17 +31,30 @@
         <true/>
         <key>NSExceptionDomains</key>
         <dict>
-            <key>192.168.1.100</key>
+            <key>192.168.29.106</key>
             <dict>
                 <key>NSExceptionAllowsInsecureHTTPLoads</key>
                 <true/>
             </dict>
-            <key>192.168.1.50</key>
+            <key>192.168.29.7</key>
             <dict>
                 <key>NSExceptionAllowsInsecureHTTPLoads</key>
                 <true/>
             </dict>
         </dict>
     </dict>
+
+    <!-- Deep Link URL Scheme Configuration -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.opay.client</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>opay</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>

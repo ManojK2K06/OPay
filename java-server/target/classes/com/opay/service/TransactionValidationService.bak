@@ -1,0 +1,168 @@
+package com.opay.service;
+
+import com.opay.crypto.CryptoService;
+import com.opay.crypto.OPayWireFrame;
+import com.opay.model.*;
+import com.opay.repository.*;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class TransactionValidationService {
+
+    private final CryptoService cryptoService;
+    private final AccountRepository accountRepository;
+    private final UserKeyRepository userKeyRepository;
+    private final TransactionRepository transactionRepository;
+    private final ProcessedTxnIdRepository processedTxnIdRepository;
+    private final AndroidGatewayService gatewayService;
+    private final AuditService auditService;
+
+    // ── Process Incoming SMS ─────────────────────────────────
+
+    /**
+     * Full validation pipeline for an incoming encrypted SMS transaction.
+     * Called by SmsWebhookController.
+     *
+     * Steps:
+     *  1. Look up sender public key
+     *  2. Decrypt + verify Secure Enclave signature
+     *  3. Replay attack check (duplicate TxnID)
+     *  4. Timestamp freshness check (handled inside CryptoService)
+     *  5. Account existence check
+     *  6. Sufficient balance check
+     *  7. Atomic debit/credit + persist transaction
+     *  8. Send reply SMS
+     */
+    @Transactional
+    public ValidationResult processTransaction(String senderPhone, String smsBody) {
+        log.info("[OPay Demo Bypass] Processing TXN SMS from {} | body length={}", senderPhone, smsBody.length());
+        
+        try {
+            // Expected: "OPAY-TXN:<receiver>:<amount>"
+            String[] parts = smsBody.trim().substring(9).split(":");
+            if (parts.length != 2) return ValidationResult.fail("INVALID_FORMAT");
+            
+            String receiverAccStr = parts[0];
+            long amountPaise = Long.parseLong(parts[1]);
+
+            Account senderAccount = accountRepository.findByPhoneNumber(senderPhone).orElse(null);
+            if (senderAccount == null) return ValidationResult.fail("UNKNOWN_SENDER");
+
+            Account receiverAccount = accountRepository.findByAccountNumber(receiverAccStr).orElse(null);
+            if (receiverAccount == null) return ValidationResult.fail("RECEIVER_NOT_FOUND");
+
+            if (senderAccount.getBalancePaise() < amountPaise) {
+                auditService.logFailure("TXN_FAILED_INSUFFICIENT_FUNDS", "Insufficient funds", senderAccount.getAccountNumber(), senderPhone, smsBody);
+                return ValidationResult.fail("INSUFFICIENT_FUNDS");
+            }
+
+            // Execute transfer
+            senderAccount.setBalancePaise(senderAccount.getBalancePaise() - amountPaise);
+            receiverAccount.setBalancePaise(receiverAccount.getBalancePaise() + amountPaise);
+            accountRepository.save(senderAccount);
+            accountRepository.save(receiverAccount);
+
+            auditService.logSuccess("TXN_SUCCESS_BYPASS",
+                    String.format("Transfer of ₹%.2f to %s", amountPaise / 100.0, receiverAccStr),
+                    senderAccount.getAccountNumber(), senderPhone);
+
+            // Send success deep link back
+            gatewayService.sendSMS(senderPhone, "opay://txn?d=" + senderAccount.getBalancePaise());
+            return ValidationResult.success();
+            
+        } catch (Exception e) {
+            log.error("[OPay Demo] Failed to parse TXN bypass: {}", e.getMessage());
+            return ValidationResult.fail("PARSE_ERROR");
+        }
+    }
+        accountRepository.save(senderAccount);
+        accountRepository.save(receiverAccount);
+
+        // Persist committed transaction
+        Transaction txn = new Transaction();
+        txn.setTxnId(frame.txnId());
+        txn.setSenderAccount(String.valueOf(frame.senderAccount()));
+        txn.setReceiverAccount(String.valueOf(frame.receiverAccount()));
+        txn.setAmountPaise(frame.amountPaise());
+        txn.setPayloadTimestamp(frame.timestamp());
+        txn.setStatus(TxnStatus.SUCCESS);
+        txn.setRawSmsPayload(smsBody);
+        txn.setSenderPhone(senderPhone);
+        transactionRepository.save(txn);
+
+        // Mark TxnID as processed (idempotency guard)
+        processedTxnIdRepository.save(new ProcessedTxnId(null, frame.txnId(), Instant.now()));
+
+        // Audit: log successful transaction
+        auditService.logSuccess("TXN_SUCCESS",
+                String.format("TxnID=%d, %s → %s, ₹%.2f",
+                        frame.txnId(), frame.senderAccount(), frame.receiverAccount(), frame.amountPaise() / 100.0),
+                senderAccount.getAccountNumber(), senderPhone);
+
+        // 8. Confirmation SMS
+        String confirm = String.format(
+                "OPAY-RSP: SUCCESS TXN=%d AMT=%.2f BAL=%.2f",
+                frame.txnId() & 0xFFFF,   // short display ID
+                frame.amountPaise() / 100.0,
+                senderAccount.getBalancePaise() / 100.0
+        );
+        gatewayService.sendSMS(senderPhone, confirm);
+
+    // ── Balance Query ────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public void processBalanceQuery(String senderPhone, String smsBody) {
+        log.info("[OPay Demo Bypass] Processing BAL SMS from: {}", senderPhone);
+        
+        Account senderAccount = accountRepository.findByPhoneNumber(senderPhone).orElse(null);
+        if (senderAccount == null) {
+            log.warn("[OPay BAL] Unknown sender phone: {}", senderPhone);
+            return;
+        }
+
+        auditService.logSuccess("BALANCE_QUERY_BYPASS",
+                String.format("Balance query for %s: ₹%.2f", senderAccount.getAccountNumber(), senderAccount.getBalancePaise() / 100.0),
+                senderAccount.getAccountNumber(), senderPhone);
+
+        // Send unencrypted response
+        gatewayService.sendSMS(senderPhone, "opay://bal?d=" + senderAccount.getBalancePaise());
+    }
+
+    // ── Helpers ──────────────────────────────────────────────
+
+    private void persistFailed(String senderAcc, OPayWireFrame frame, TxnStatus status,
+                                String reason, String raw, String phone) {
+        Transaction txn = new Transaction();
+        txn.setTxnId(frame != null ? frame.txnId() : -1L);
+        txn.setSenderAccount(senderAcc);
+        txn.setReceiverAccount(frame != null ? String.valueOf(frame.receiverAccount()) : "UNKNOWN");
+        txn.setAmountPaise(frame != null ? frame.amountPaise() : 0L);
+        txn.setPayloadTimestamp(Instant.now().getEpochSecond());
+        txn.setStatus(status);
+        txn.setFailureReason(reason);
+        txn.setRawSmsPayload(raw);
+        txn.setSenderPhone(phone);
+        transactionRepository.save(txn);
+    }
+
+    // ── Result ───────────────────────────────────────────────
+
+    public record ValidationResult(
+            boolean success, Long txnId, Long amountPaise,
+            Long newBalancePaise, String failureReason
+    ) {
+        static ValidationResult success(long txnId, long amount, long balance) {
+            return new ValidationResult(true, txnId, amount, balance, null);
+        }
+        static ValidationResult fail(String reason) {
+            return new ValidationResult(false, null, null, null, reason);
+        }
+    }
+}

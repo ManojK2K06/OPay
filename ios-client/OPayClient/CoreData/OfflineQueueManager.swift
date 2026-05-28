@@ -2,6 +2,7 @@ import Foundation
 import CoreData
 import CryptoKit
 import Network
+import Combine
 
 // MARK: – CoreData Stack
 
@@ -43,24 +44,29 @@ final class OfflineQueueManager: ObservableObject {
 
     static let shared = OfflineQueueManager()
 
-    @Published var pendingCount: Int = 0
-    @Published var isOnline: Bool = false
+    @Published var pendingCount: Int
+    @Published var isOnline: Bool
 
     private let context: NSManagedObjectContext
-    private let monitor = NWPathMonitor(requiredInterfaceType: .cellular)
-    private let monitorQueue = DispatchQueue(label: "com.opay.netmonitor")
+    private let monitor: NWPathMonitor
+    private let monitorQueue: DispatchQueue
 
     private init() {
-        context = PersistenceController.shared.container.newBackgroundContext()
-        context.mergePolicy = NSMergeByPropertyStoreTrumpMergePolicy
-        startNetworkMonitor()
-        refreshPendingCount()
+        self.pendingCount = 0
+        self.isOnline = false
+        self.monitor = NWPathMonitor(requiredInterfaceType: .cellular)
+        self.monitorQueue = DispatchQueue(label: "com.opay.netmonitor")
+        self.context = PersistenceController.shared.container.newBackgroundContext()
+        self.context.mergePolicy = NSMergeByPropertyStoreTrumpMergePolicy
+        
+        self.startNetworkMonitor()
+        self.refreshPendingCount()
     }
 
     // MARK: – Enqueue
 
     /// Appends a new pending transaction to the immutable hash-chain queue.
-    func enqueue(frame: OPayWireFrame, smsPayload: String) throws {
+    func enqueue(frame: OPayWireFrame, smsPayload: String, status: String = "pending") throws {
         try context.performAndWait {
             let entity = NSEntityDescription.insertNewObject(
                 forEntityName: "OPayPendingTxn",
@@ -73,7 +79,7 @@ final class OfflineQueueManager: ObservableObject {
             entity.setValue(Int64(frame.amountPaise), forKey: "amountPaise")
             entity.setValue(Date(timeIntervalSince1970: TimeInterval(frame.timestamp)), forKey: "timestamp")
             entity.setValue(smsPayload, forKey: "smsPayload")
-            entity.setValue("pending", forKey: "status")
+            entity.setValue(status, forKey: "status")
             entity.setValue(Date(), forKey: "createdAt")
             entity.setValue(Int16(0), forKey: "retryCount")
 

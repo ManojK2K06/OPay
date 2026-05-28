@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import Combine
 
 final class TransactionManager: ObservableObject {
 
@@ -11,14 +12,15 @@ final class TransactionManager: ObservableObject {
     /// Called by TransferView when the user taps "Send".
     /// - If online: immediately presents SMS compose sheet.
     /// - If offline: enqueues to CoreData hash-chain queue for later dispatch.
+    /// Always logs the transaction locally regardless of online/offline status.
     @MainActor
     func initiateTransfer(
         from senderAccount: UInt64,
         to receiverAccount: UInt64,
         amountPaise: UInt32,
         presentingVC: UIViewController
-    ) async throws {
-        // Build wire frame
+    ) async throws -> Bool {
+
         let frame = OPayWireFrame(
             senderAccount: senderAccount,
             receiverAccount: receiverAccount,
@@ -28,27 +30,38 @@ final class TransactionManager: ObservableObject {
             version: 1
         )
 
-        // Encrypt + sign → SMS payload
-        let smsPayload = try ECCPayloadEngine.shared.buildSMSPayload(frame: frame)
+        let smsPayload = "OPAY-TXN: \(senderAccount),\(receiverAccount),\(amountPaise)"
         let gateway = ConfigManager.shared.gatewayPhoneNumber
 
-        if OfflineQueueManager.shared.isOnline {
-            // Online: dispatch immediately via SMS
+        // Always present the SMS composer (since we rely on SMS, not internet)
+        let sent = await withCheckedContinuation { continuation in
             SMSGatewayClient.shared.presentSMSCompose(
                 to: gateway,
                 payload: smsPayload,
                 from: presentingVC
             ) { sent in
-                if !sent {
-                    // User cancelled or error – enqueue as pending
-                    try? OfflineQueueManager.shared.enqueue(frame: frame, smsPayload: smsPayload)
-                }
+                continuation.resume(returning: sent)
             }
-        } else {
-            // Offline: store in hash-chain queue (The "Promise")
-            try OfflineQueueManager.shared.enqueue(frame: frame, smsPayload: smsPayload)
-            print("[OPay] Transaction queued offline. TxnID: \(frame.txnID)")
         }
+        
+        // Always log the transaction locally
+        if sent {
+            try? OfflineQueueManager.shared.enqueue(
+                frame: frame,
+                smsPayload: smsPayload,
+                status: "dispatched"
+            )
+            print("[OPay] Transaction logged locally and SMS sent. TxnID: \(frame.txnID)")
+        } else {
+            try? OfflineQueueManager.shared.enqueue(
+                frame: frame,
+                smsPayload: smsPayload,
+                status: "pending"
+            )
+            print("[OPay] Transaction logged locally but SMS cancelled. TxnID: \(frame.txnID)")
+        }
+        
+        return sent
     }
 
     // MARK: – Verify Queue
