@@ -15,7 +15,7 @@ struct MainTabView: View {
             HistoryView()
                 .tabItem { Label("History", systemImage: "clock.fill") }
         }
-        .accentColor(Color(hex: "00D4AA"))
+        .accentColor(Color(hex: "389B85"))
         .preferredColorScheme(.dark)
     }
 }
@@ -48,13 +48,13 @@ struct BalanceView: View {
                                 .textCase(.uppercase)
 
                             if appState.isLoadingBalance {
-                                ProgressView().tint(Color(hex: "00D4AA"))
+                                ProgressView().tint(Color(hex: "389B85"))
                             } else {
                                 Text(balanceFormatted)
                                     .font(.system(size: 52, weight: .heavy, design: .rounded))
                                     .foregroundStyle(
                                         LinearGradient(
-                                            colors: [Color(hex: "00D4AA"), Color(hex: "00A8FF")],
+                                            colors: [Color(hex: "389B85"), Color(hex: "226E5D")],
                                             startPoint: .leading, endPoint: .trailing
                                         )
                                     )
@@ -71,18 +71,18 @@ struct BalanceView: View {
                                 .fill(Color.white.opacity(0.05))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 24)
-                                        .stroke(Color(hex: "00D4AA").opacity(0.3), lineWidth: 1)
+                                        .stroke(Color(hex: "389B85").opacity(0.3), lineWidth: 1)
                                 )
                         )
 
                         // Status Strip
                         HStack(spacing: 12) {
                             Circle()
-                                .fill(queue.isOnline ? Color(hex: "00D4AA") : Color(hex: "FF4757"))
+                                .fill(queue.isOnline ? Color(hex: "389B85") : Color(hex: "FF4757"))
                                 .frame(width: 8, height: 8)
                                 .overlay(
                                     Circle()
-                                        .stroke(queue.isOnline ? Color(hex: "00D4AA") : Color(hex: "FF4757"),
+                                        .stroke(queue.isOnline ? Color(hex: "389B85") : Color(hex: "FF4757"),
                                                 lineWidth: 2)
                                         .scaleEffect(showRefreshAnimation ? 2 : 1)
                                         .opacity(showRefreshAnimation ? 0 : 0.6)
@@ -203,7 +203,7 @@ struct TransferView: View {
                                 fieldLabel("From")
                                 Text(appState.accountNumber)
                                     .font(.system(size: 15, design: .monospaced))
-                                    .foregroundColor(Color(hex: "00D4AA"))
+                                    .foregroundColor(Color(hex: "389B85"))
                                     .padding()
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(Color.white.opacity(0.05))
@@ -248,7 +248,7 @@ struct TransferView: View {
     private var payloadEstimateView: some View {
         HStack(spacing: 8) {
             Image(systemName: "info.circle")
-                .foregroundColor(Color(hex: "00A8FF"))
+                .foregroundColor(Color(hex: "226E5D"))
             Text("Estimated SMS payload: ~157 chars (fits 160-char limit)")
                 .font(.caption)
                 .foregroundColor(Color.white.opacity(0.5))
@@ -319,7 +319,7 @@ struct HistoryView: View {
                             Image(systemName: chainValid == true
                                   ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
                                 .foregroundColor(chainValid == true
-                                                 ? Color(hex: "00D4AA") : Color(hex: "FF4757"))
+                                                 ? Color(hex: "389B85") : Color(hex: "FF4757"))
                             VStack(alignment: .leading) {
                                 Text(chainValid == true ? "Chain Integrity: Valid" : "Chain Integrity: Checking…")
                                     .font(.system(size: 14, weight: .semibold))
@@ -367,7 +367,7 @@ struct HistoryView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text("₹\(String(format: "%.2f", Double((txn["amountPaise"] as? Int64 ?? 0)) / 100))")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(Color(hex: "00D4AA"))
+                    .foregroundColor(Color(hex: "389B85"))
                 Text((txn["status"] as? String ?? "").uppercased())
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundColor(statusColor(txn["status"] as? String ?? ""))
@@ -378,8 +378,8 @@ struct HistoryView: View {
 
     private func statusColor(_ status: String) -> Color {
         switch status {
-        case "confirmed": return Color(hex: "00D4AA")
-        case "dispatched": return Color(hex: "00A8FF")
+        case "confirmed": return Color(hex: "389B85")
+        case "dispatched": return Color(hex: "226E5D")
         case "pending": return Color(hex: "FFD700")
         default: return Color(hex: "FF4757")
         }
@@ -397,7 +397,7 @@ struct HistoryView: View {
 
 private var backgroundGradient: some View {
     LinearGradient(
-        colors: [Color(hex: "0D0D0D"), Color(hex: "1A1A2E")],
+        colors: [Color(hex: "0A1128"), Color(hex: "1C2541")],
         startPoint: .top, endPoint: .bottom
     )
 }

@@ -13,7 +13,7 @@ struct OnboardingView: View {
         ZStack {
             // Background gradient
             LinearGradient(
-                colors: [Color(hex: "0D0D0D"), Color(hex: "1A1A2E"), Color(hex: "16213E")],
+                colors: [Color(hex: "0A1128"), Color(hex: "1C2541"), Color(hex: "0B1D3A")],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
@@ -26,7 +26,7 @@ struct OnboardingView: View {
                     ZStack {
                         Circle()
                             .fill(LinearGradient(
-                                colors: [Color(hex: "00D4AA"), Color(hex: "00A8FF")],
+                                colors: [Color(hex: "389B85"), Color(hex: "226E5D")],
                                 startPoint: .topLeading, endPoint: .bottomTrailing
                             ))
                             .frame(width: 80, height: 80)
@@ -37,7 +37,7 @@ struct OnboardingView: View {
                     Text("OPay")
                         .font(.system(size: 42, weight: .heavy))
                         .foregroundStyle(
-                            LinearGradient(colors: [Color(hex: "00D4AA"), Color(hex: "00A8FF")],
+                            LinearGradient(colors: [Color(hex: "389B85"), Color(hex: "226E5D")],
                                            startPoint: .leading, endPoint: .trailing)
                         )
                     Text("Offline-First Payments")
@@ -109,7 +109,7 @@ struct OnboardingView: View {
     private var registeringContent: some View {
         VStack(spacing: 20) {
             ProgressView()
-                .tint(Color(hex: "00D4AA"))
+                .tint(Color(hex: "389B85"))
                 .scaleEffect(1.5)
             Text("Generating Secure Enclave keypair\nand registering with server…")
                 .font(.system(size: 15))
@@ -122,7 +122,7 @@ struct OnboardingView: View {
         VStack(spacing: 20) {
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 60))
-                .foregroundColor(Color(hex: "00D4AA"))
+                .foregroundColor(Color(hex: "389B85"))
             Text("Device Registered!")
                 .font(.title2.bold())
                 .foregroundColor(.white)
@@ -166,7 +166,7 @@ struct OnboardingView: View {
         HStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.title2)
-                .foregroundColor(Color(hex: "00D4AA"))
+                .foregroundColor(Color(hex: "389B85"))
                 .frame(width: 36)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
@@ -193,7 +193,7 @@ struct OPayButton: View {
                 .padding(.vertical, 16)
                 .background(
                     LinearGradient(
-                        colors: [Color(hex: "00D4AA"), Color(hex: "00A8FF")],
+                        colors: [Color(hex: "389B85"), Color(hex: "226E5D")],
                         startPoint: .leading, endPoint: .trailing
                     )
                 )

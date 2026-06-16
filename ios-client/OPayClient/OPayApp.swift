@@ -103,7 +103,7 @@ struct LockView: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(hex: "0D0D0D"), Color(hex: "1A1A2E")],
+                colors: [Color(hex: "0A1128"), Color(hex: "1C2541")],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             ).ignoresSafeArea()
 
@@ -111,7 +111,7 @@ struct LockView: View {
                 Image(systemName: "lock.shield.fill")
                     .font(.system(size: 80))
                     .foregroundStyle(
-                        LinearGradient(colors: [Color(hex: "00D4AA"), Color(hex: "00A8FF")],
+                        LinearGradient(colors: [Color(hex: "389B85"), Color(hex: "226E5D")],
                                        startPoint: .top, endPoint: .bottom)
                     )
                 
@@ -134,7 +134,7 @@ struct LockView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
-                            LinearGradient(colors: [Color(hex: "00D4AA"), Color(hex: "00A8FF")],
+                            LinearGradient(colors: [Color(hex: "389B85"), Color(hex: "226E5D")],
                                            startPoint: .leading, endPoint: .trailing)
                         )
                         .cornerRadius(14)
